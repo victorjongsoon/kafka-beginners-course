@@ -13,36 +13,40 @@ public class WikimediaChangeHandler implements EventHandler {
     String topic;
     private final Logger log = LoggerFactory.getLogger(WikimediaChangeHandler.class.getSimpleName());
 
-    public WikimediaChangeHandler(KafkaProducer<String, String> kafkaProducer, String topic){
+    /*
+    * We want to bring the producer from WikimediaChangesProducer to this class
+    * In order to pass in an object from one class to another, we need a constructor
+    * */
+    public  WikimediaChangeHandler(KafkaProducer<String, String> kafkaProducer, String topic){
         this.kafkaProducer = kafkaProducer;
         this.topic = topic;
     }
 
-
     @Override
-    public void onOpen() {
+    public void onOpen() throws Exception {
         // nothing here
     }
 
     @Override
-    public void onClosed() {
+    public void onClosed() throws Exception {
         kafkaProducer.close();
     }
 
     @Override
-    public void onMessage(String event, MessageEvent messageEvent) {
+    public void onMessage(String event, MessageEvent messageEvent) throws Exception {
+        // receive message from http stream
         log.info(messageEvent.getData());
         // asynchronous
         kafkaProducer.send(new ProducerRecord<>(topic, messageEvent.getData()));
     }
 
     @Override
-    public void onComment(String comment) {
+    public void onComment(String comment) throws Exception {
         // nothing here
     }
 
     @Override
     public void onError(Throwable t) {
-        log.error("Error in Stream Reading", t);
+        log.error("Error in Stream reading", t);
     }
 }
