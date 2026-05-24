@@ -17,7 +17,7 @@ import java.util.Properties;
 public class WikimediaStreamsApp {
     private static final Logger LOGGER = LoggerFactory.getLogger(WikimediaStreamsApp.class);
     private static final Properties properties;
-    private static final String INPUT_TOPIC = "wikimedia.recentchange";
+    private static final String INPUT_TOPIC = "wikimedia-recentchange";
 
     static {
         properties = new Properties();
