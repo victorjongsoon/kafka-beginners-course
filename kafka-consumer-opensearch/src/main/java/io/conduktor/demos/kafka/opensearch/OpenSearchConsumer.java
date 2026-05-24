@@ -6,16 +6,27 @@ import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestHighLevelClient;
 import org.opensearch.client.indices.CreateIndexRequest;
 import org.opensearch.client.indices.GetIndexRequest;
+import org.opensearch.common.xcontent.XContentType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Properties;
 
 public class OpenSearchConsumer {
 
@@ -26,9 +37,11 @@ public class OpenSearchConsumer {
         // first create on OpenSearch Client
         RestHighLevelClient openSearchClient = createOpenSearchClient();
 
-        // we need to create the index on OpenSearch if it doesn't exist already
+        // create our Kafka Client
+        KafkaConsumer<String, String> consumer = createKafkaConsumer();
 
-        try (openSearchClient)
+        // we need to create the index on OpenSearch if it doesn't exist already
+        try (openSearchClient; consumer)
         {
             boolean indexExists = openSearchClient.indices().exists(new GetIndexRequest("wikimedia"), RequestOptions.DEFAULT);
 
@@ -41,11 +54,31 @@ public class OpenSearchConsumer {
                 log.info("The wikimedia index has already exists");
             }
 
+            // we subscribe the consumer
+            consumer.subscribe(Collections.singleton("wikimedia-recentchange"));
 
+            while (true) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(3000));
+
+                int recordCount = records.count();
+                log.info("Received " + recordCount + " record(s)");
+
+                for (ConsumerRecord<String, String> record : records){
+                    // send the record into OpenSearch
+                    try{
+                        IndexRequest indexRequest = new IndexRequest("wikimedia")
+                                .source(record.value(), XContentType.JSON);
+
+                        IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+
+                        log.info(response.getId());
+                    } catch (Exception e) {
+
+                    }
+
+                }
+            }
         }
-
-
-        // create our Kafka Client
 
         // main code logic
 
@@ -91,5 +124,20 @@ public class OpenSearchConsumer {
         }
 
         return restHighLevelClient;
+    }
+
+    public static KafkaConsumer<String, String> createKafkaConsumer() {
+        String groupId = "consumer-opensearch-demo";
+        String bootstrapServers = "127.0.0.1:9092";
+
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+
+        // create consumer
+        return new KafkaConsumer<>(properties);
     }
 }
