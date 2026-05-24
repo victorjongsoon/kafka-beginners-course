@@ -65,9 +65,15 @@ public class OpenSearchConsumer {
 
                 for (ConsumerRecord<String, String> record : records){
                     // send the record into OpenSearch
+
+                    // strategy 1
+                    // define an ID using kafka Record coordinates
+                    String id = record.topic() + "_" + record.partition() + "_" + record.offset();
+
                     try{
                         IndexRequest indexRequest = new IndexRequest("wikimedia")
-                                .source(record.value(), XContentType.JSON);
+                                .source(record.value(), XContentType.JSON)
+                                .id(id);
 
                         IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
 
